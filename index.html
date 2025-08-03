@@ -57,14 +57,9 @@
 </head>
 <body>
   <canvas id="bg"></canvas>
-
-  <!-- Sneaky muted autoplay looping video to unlock audio -->
   <video id="dummyVideo" muted autoplay loop playsinline>
     <source src="data:video/webm;base64,GkXfo0AgQoaBAULAAEAAAAMAoAAAQAAGAAAAAYAAABsAAABAAQA=" type="video/webm" />
-    Your browser does not support the video tag.
   </video>
-
-  <!-- Extra silent audio loop to assist autoplay -->
   <audio id="dummyAudio" autoplay loop muted playsinline>
     <source src="data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAeAAACABAAZGF0YQAAAAA=" type="audio/mp3" />
   </audio>
@@ -84,7 +79,6 @@
   </div>
 
   <script>
-    // ======= VISUALS =======
     const canvas = document.getElementById('bg');
     const ctx = canvas.getContext('2d');
     let width, height;
@@ -190,7 +184,6 @@
       constructor(freq, settings) {
         this.freq = freq;
         this.settings = settings;
-
         this.osc1 = audioCtx.createOscillator();
         this.osc2 = audioCtx.createOscillator();
         this.gainNode = audioCtx.createGain();
@@ -250,30 +243,27 @@
         await dummyVideo.play();
         await dummyAudio.play();
       } catch (err) {
-        console.warn('Media elements failed to autoplay:', err);
+        console.warn('Media trick elements failed to play:', err);
       }
 
-      if (!audioCtx) {
+      if (!audioCtx || audioCtx.state === 'closed') {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
 
       try {
-        await audioCtx.resume();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
       } catch (e) {
         console.warn('AudioContext resume failed:', e);
+        return;
       }
-
-      setTimeout(() => {
-        if (audioCtx.state !== 'running') {
-          audioCtx.resume().catch(() => {});
-        }
-      }, 400);
 
       const instrument = document.getElementById('instrument').value;
       const settings = getInstrumentSettings(instrument);
 
       function generateNote() {
-        if (!isPlaying) return;
+        if (!isPlaying || !audioCtx || audioCtx.state !== 'running') return;
         calmness = smoothRandom(calmness);
         const baseFreq = 150 + calmness * 650;
         let freq = lastFreq + (Math.random() - 0.5) * 80 * calmness;
