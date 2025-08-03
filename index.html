@@ -1,281 +1,298 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <title>Electric Music Generator</title>
-  <style>
-  body {
-    margin: 0;
-    background: black;
-    font-family: 'Segoe UI', sans-serif;
-    color: #cceaff;
-    overflow: hidden;
-  }
-
-  canvas {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 0;
-    width: 100vw;
-    height: 100vh;
-  }
-
-  #ui {
-    position: absolute;
-    top: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    z-index: 1;
-  }
-
-  select, button {
-    background-color: #001f33;
-    border: 2px solid #00aaff;
-    color: white;
-    font-size: 18px;
-    padding: 10px 20px;
-    margin: 10px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-  }
-  select:hover, button:hover {
-    background-color: #004d99;
-  }
-
-  h1 {
-    font-size: 42px;
-    margin-bottom: 20px;
-    text-shadow: 0 0 10px #00ffff;
-  }
-  </style>
-</head>
-<body>
-  <canvas id="bg"></canvas>
-  <div id="ui">
-    <h1>Electric Music Generator</h1><select id="instrument">
-      <option value="synth">
-        Synth (Smooth)
-      </option>
-      <option value="flute">
-        Flute
-      </option>
-      <option value="piano">
-        Piano
-      </option>
-      <option value="bell">
-        Bell
-      </option>
-      <option value="choir">
-        Choir
-      </option>
-    </select><br>
-    <button onclick="startMusic()">Start Audio</button> <button onclick="stopMusic()">Stop Audio</button>
-  </div>
-  <script>
-  // === Background Dots & Lines ===
-  const canvas = document.getElementById('bg');
-  const ctx = canvas.getContext('2d');
-  let width, height;
-
-  function resize() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  resize();
-
-  const dots = [];
-  const DOT_COUNT = 120;
-  for (let i = 0; i < DOT_COUNT; i++) dots.push(new Dot());
-
-  function drawLines() {
-    for (let i = 0; i < DOT_COUNT; i++) {
-      const d1 = dots[i];
-      for (let j = i + 1; j < DOT_COUNT; j++) {
-        const d2 = dots[j];
-        const dx = d1.x - d2.x;
-        const dy = d1.y - d2.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 150) {
-          let alpha = 1 - dist / 150;
-          alpha *= 0.25; // max line alpha lower for subtlety
-          ctx.strokeStyle = `rgba(0, 180, 255, ${alpha.toFixed(3)})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(d1.x, d1.y);
-          ctx.lineTo(d2.x, d2.y);
-          ctx.stroke();
+    <meta charset="UTF-8">
+    <title>Electric Music Generator</title>
+    <style>
+        body {
+            margin: 0;
+            background: black;
+            font-family: 'Segoe UI', sans-serif;
+            color: #cceaff;
+            overflow: hidden;
         }
-      }
-    }
-  }
 
-  function animate() {
-    ctx.clearRect(0, 0, width, height);
-    for (const d of dots) {
-      d.update();
-      d.draw();
-    }
-    drawLines();
-    requestAnimationFrame(animate);
-  }
-  animate();
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            width: 100vw;
+            height: 100vh;
+        }
 
-  // === Audio ===
-  let audioCtx = null;
-  let isPlaying = false;
-  let currentVoices = [];
+        #ui {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 1;
+        }
 
-  const instrumentSelector = document.getElementById('instrument');
+        select,
+        button {
+            background-color: #001f33;
+            border: 2px solid #00aaff;
+            color: white;
+            font-size: 18px;
+            padding: 10px 20px;
+            margin: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
 
-  // Utility: smooth random generator (Perlin-like)
-  // Using a simple easing for smoother randomness
-  class SmoothRandom {
-    constructor(smoothing = 0.03) {
-      this.value = Math.random();
-      this.smoothing = smoothing;
-    }
-    next() {
-      this.value += (Math.random() - 0.5) * this.smoothing * 2;
-      if (this.value < 0) this.value = 0;
-      if (this.value > 1) this.value = 1;
-      return this.value;
-    }
-  }
+        select:hover,
+        button:hover {
+            background-color: #004d99;
+        }
 
-  // Voice: 2 oscillators detuned, with filter & gain envelopes
-  class Voice {
-    constructor(freq, type, filterFreq) {
-      this.osc1 = audioCtx.createOscillator();
-      this.osc2 = audioCtx.createOscillator();
-      this.gainNode = audioCtx.createGain();
-      this.filter = audioCtx.createBiquadFilter();
+        h1 {
+            font-size: 42px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #00ffff;
+        }
+    </style>
+</head>
 
-      this.osc1.type = type;
-      this.osc2.type = type;
+<body>
+    <canvas id="bg"></canvas>
+    <div id="ui">
+        <h1>Electric Music Generator</h1>
+        <select id="instrument">
+            <option value="synth">
+                Synth (Smooth)
+            </option>
+            <option value="flute">
+                Flute
+            </option>
+            <option value="piano">
+                Piano
+            </option>
+            <option value="bell">
+                Bell
+            </option>
+            <option value="choir">
+                Choir
+            </option>
+        </select><br>
+        <button onclick="startMusic()">Start Audio</button> <button onclick="stopMusic()">Stop Audio</button>
+    </div>
+    <script>
+        // === Background Dots & Lines ===
+        const canvas = document.getElementById('bg');
+        const ctx = canvas.getContext('2d');
+        let width, height;
 
-      // Slight detune for warmth
-      this.osc1.frequency.setValueAtTime(freq * 0.997, audioCtx.currentTime);
-      this.osc2.frequency.setValueAtTime(freq * 1.003, audioCtx.currentTime);
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-      // Filter setup
-      this.filter.type = 'lowpass';
-      this.filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
-      this.filter.Q.value = 6;
+        resize();
 
-      this.osc1.connect(this.filter);
-      this.osc2.connect(this.filter);
-      this.filter.connect(this.gainNode);
-      this.gainNode.connect(audioCtx.destination);
+        const dots = [];
+        const DOT_COUNT = 120;
+        for (let i = 0; i < DOT_COUNT; i++) dots.push(new Dot());
 
-      this.gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        function drawLines() {
+            for (let i = 0; i < DOT_COUNT; i++) {
+                const d1 = dots[i];
+                for (let j = i + 1; j < DOT_COUNT; j++) {
+                    const d2 = dots[j];
+                    const dx = d1.x - d2.x;
+                    const dy = d1.y - d2.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 150) {
+                        let alpha = 1 - dist / 150;
+                        alpha *= 0.25; // max line alpha lower for subtlety
+                        ctx.strokeStyle = `rgba(0, 180, 255, ${alpha.toFixed(3)})`;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(d1.x, d1.y);
+                        ctx.lineTo(d2.x, d2.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
 
-      this.osc1.start();
-      this.osc2.start();
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            for (const d of dots) {
+                d.update();
+                d.draw();
+            }
+            drawLines();
+            requestAnimationFrame(animate);
+        }
+        animate();
 
-      this.alive = true;
-    }
+        // === Audio ===
+        let audioCtx = null;
+        let isPlaying = false;
+        let currentVoices = [];
 
-    update(freq, filterFreq, time) {
-      if (!this.alive) return;
+        const instrumentSelector = document.getElementById('instrument');
 
-      const now = audioCtx.currentTime;
+        // Utility: smooth random generator (Perlin-like)
+        // Using a simple easing for smoother randomness
+        class SmoothRandom {
+            constructor(smoothing = 0.03) {
+                this.value = Math.random();
+                this.smoothing = smoothing;
+            }
+            next() {
+                this.value += (Math.random() - 0.5) * this.smoothing * 2;
+                if (this.value < 0) this.value = 0;
+                if (this.value > 1) this.value = 1;
+                return this.value;
+            }
+        }
 
-      this.osc1.frequency.linearRampToValueAtTime(freq * 0.997, now + time);
-      this.osc2.frequency.linearRampToValueAtTime(freq * 1.003, now + time);
+        // Voice: 2 oscillators detuned, with filter & gain envelopes
+        class Voice {
+            constructor(freq, type, filterFreq) {
+                this.osc1 = audioCtx.createOscillator();
+                this.osc2 = audioCtx.createOscillator();
+                this.gainNode = audioCtx.createGain();
+                this.filter = audioCtx.createBiquadFilter();
 
-      this.filter.frequency.linearRampToValueAtTime(filterFreq, now + time);
+                this.osc1.type = type;
+                this.osc2.type = type;
 
-      // Smooth gain envelope (attack 1.5s, release 2s)
-      this.gainNode.gain.cancelScheduledValues(now);
-      this.gainNode.gain.setTargetAtTime(0.07, now, 1.5);
-    }
+                // Slight detune for warmth
+                this.osc1.frequency.setValueAtTime(freq * 0.997, audioCtx.currentTime);
+                this.osc2.frequency.setValueAtTime(freq * 1.003, audioCtx.currentTime);
 
-    stop() {
-      if (!this.alive) return;
-      const now = audioCtx.currentTime;
-      this.gainNode.gain.setTargetAtTime(0, now, 3);
-      this.osc1.stop(now + 4);
-      this.osc2.stop(now + 4);
-      this.alive = false;
-    }
-  }
+                // Filter setup
+                this.filter.type = 'lowpass';
+                this.filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
+                this.filter.Q.value = 6;
 
-  function getInstrumentSettings(name) {
-    switch (name) {
-      case 'flute':
-        return { type: 'sine', filterFreq: 1200 };
-      case 'piano':
-        return { type: 'triangle', filterFreq: 900 };
-      case 'bell':
-        return { type: 'square', filterFreq: 1800 };
-      case 'choir':
-        return { type: 'sawtooth', filterFreq: 800 };
-      default:
-        return { type: 'sine', filterFreq: 3000 }; // Synth
-    }
-  }
+                this.osc1.connect(this.filter);
+                this.osc2.connect(this.filter);
+                this.filter.connect(this.gainNode);
+                this.gainNode.connect(audioCtx.destination);
 
-  let freqRandom, filterRandom;
-  let updateInterval;
+                this.gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
 
-  function startMusic() {
-    if (isPlaying) return;
+                this.osc1.start();
+                this.osc2.start();
 
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                this.alive = true;
+            }
 
-    freqRandom = new SmoothRandom(0.008);
-    filterRandom = new SmoothRandom(0.01);
+            update(freq, filterFreq, time) {
+                if (!this.alive) return;
 
-    isPlaying = true;
-    currentVoices = [];
+                const now = audioCtx.currentTime;
 
-    function updateSound() {
-      if (!isPlaying) return;
+                this.osc1.frequency.linearRampToValueAtTime(freq * 0.997, now + time);
+                this.osc2.frequency.linearRampToValueAtTime(freq * 1.003, now + time);
 
-      const now = audioCtx.currentTime;
-      const instrument = instrumentSelector.value;
-      const settings = getInstrumentSettings(instrument);
+                this.filter.frequency.linearRampToValueAtTime(filterFreq, now + time);
 
-      // Smooth freq between 150Hz and 650Hz (limits high pitches)
-      const freqBase = 150 + freqRandom.next() * 500;
+                // Smooth gain envelope (attack 1.5s, release 2s)
+                this.gainNode.gain.cancelScheduledValues(now);
+                this.gainNode.gain.setTargetAtTime(0.07, now, 1.5);
+            }
 
-      // Filter freq oscillates gently between base and +/- 300Hz
-      const filterFreq = settings.filterFreq + (filterRandom.next() - 0.5) * 600;
+            stop() {
+                if (!this.alive) return;
+                const now = audioCtx.currentTime;
+                this.gainNode.gain.setTargetAtTime(0, now, 3);
+                this.osc1.stop(now + 4);
+                this.osc2.stop(now + 4);
+                this.alive = false;
+            }
+        }
 
-      // Add a new voice every 1.5 seconds, max 4 voices max at once
-      if (currentVoices.length >= 4) {
-        const oldest = currentVoices.shift();
-        oldest.stop();
-      }
+        function getInstrumentSettings(name) {
+            switch (name) {
+                case 'flute':
+                    return {
+                        type: 'sine', filterFreq: 1200
+                    };
+                case 'piano':
+                    return {
+                        type: 'triangle', filterFreq: 900
+                    };
+                case 'bell':
+                    return {
+                        type: 'square', filterFreq: 1800
+                    };
+                case 'choir':
+                    return {
+                        type: 'sawtooth', filterFreq: 800
+                    };
+                default:
+                    return {
+                        type: 'sine', filterFreq: 3000
+                    }; // Synth
+            }
+        }
 
-      const voice = new Voice(freqBase, settings.type, filterFreq);
-      currentVoices.push(voice);
+        let freqRandom, filterRandom;
+        let updateInterval;
 
-      // Update each voice's freq & filter smoothly over 3 seconds
-      currentVoices.forEach((v, i) => {
-        const t = 3 + i * 0.1;
-        v.update(freqBase, filterFreq, t);
-      });
-    }
+        function startMusic() {
+            if (isPlaying) return;
 
-    updateSound();
-    updateInterval = setInterval(updateSound, 1500);
-  }
+            if (!audioCtx) audioCtx = new(window.AudioContext || window.webkitAudioContext)();
 
-  function stopMusic() {
-    if (!isPlaying) return;
+            freqRandom = new SmoothRandom(0.008);
+            filterRandom = new SmoothRandom(0.01);
 
-    isPlaying = false;
-    clearInterval(updateInterval);
-    currentVoices.forEach(v => v.stop());
-    currentVoices = [];
-  }
-  </script>
+            isPlaying = true;
+            currentVoices = [];
+
+            function updateSound() {
+                if (!isPlaying) return;
+
+                const now = audioCtx.currentTime;
+                const instrument = instrumentSelector.value;
+                const settings = getInstrumentSettings(instrument);
+
+                // Smooth freq between 150Hz and 650Hz (limits high pitches)
+                const freqBase = 150 + freqRandom.next() * 500;
+
+                // Filter freq oscillates gently between base and +/- 300Hz
+                const filterFreq = settings.filterFreq + (filterRandom.next() - 0.5) * 600;
+
+                // Add a new voice every 1.5 seconds, max 4 voices max at once
+                if (currentVoices.length >= 4) {
+                    const oldest = currentVoices.shift();
+                    oldest.stop();
+                }
+
+                const voice = new Voice(freqBase, settings.type, filterFreq);
+                currentVoices.push(voice);
+
+                // Update each voice's freq & filter smoothly over 3 seconds
+                currentVoices.forEach((v, i) => {
+                    const t = 3 + i * 0.1;
+                    v.update(freqBase, filterFreq, t);
+                });
+            }
+
+            updateSound();
+            updateInterval = setInterval(updateSound, 1500);
+        }
+
+        function stopMusic() {
+            if (!isPlaying) return;
+
+            isPlaying = false;
+            clearInterval(updateInterval);
+            currentVoices.forEach(v => v.stop());
+            currentVoices = [];
+        }
+    </script>
 </body>
+
 </html>
