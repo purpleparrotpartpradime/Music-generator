@@ -1,192 +1,298 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Electric Music Generator</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: black;
-      overflow: hidden;
-      font-family: 'Segoe UI', sans-serif;
-      height: 100%;
-    }
-    #ui {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.7);
-      border: 2px solid #00bfff;
-      padding: 20px 30px;
-      border-radius: 15px;
-      text-align: center;
-      color: #00bfff;
-      z-index: 10;
-    }
-    label, select, button {
-      font-size: 1.3em;
-      margin: 10px;
-      background: black;
-      color: #00bfff;
-      border: 1px solid #00bfff;
-      border-radius: 8px;
-      padding: 5px 10px;
-    }
-    canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 0;
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>Electric Music Generator</title>
+<style>
+  body {
+    margin: 0;
+    background: black;
+    font-family: 'Segoe UI', sans-serif;
+    color: #cceaff;
+    overflow: hidden;
+  }
+
+  canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  #ui {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 1;
+  }
+
+  select, button {
+    background-color: #001f33;
+    border: 2px solid #00aaff;
+    color: white;
+    font-size: 18px;
+    padding: 10px 20px;
+    margin: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  select:hover, button:hover {
+    background-color: #004d99;
+  }
+
+  h1 {
+    font-size: 42px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px #00ffff;
+  }
+</style>
 </head>
 <body>
-  <div id="ui">
-    <label for="instrument">Instrument:</label>
-    <select id="instrument">
-      <option value="synth">Synth</option>
-      <option value="bell">Bell</option>
-      <option value="piano">Piano</option>
-      <option value="choir">Choir</option>
-    </select><br />
-    <button onclick="startMusic()">Start</button>
-    <button onclick="stopMusic()">Stop</button>
-  </div>
-  <canvas id="bg"></canvas>
+<canvas id="bg"></canvas>
+<div id="ui">
+  <h1>Electric Music Generator</h1>
+  <select id="instrument">
+    <option value="synth">Synth (Smooth)</option>
+    <option value="flute">Flute</option>
+    <option value="piano">Piano</option>
+    <option value="bell">Bell</option>
+    <option value="choir">Choir</option>
+  </select><br />
+  <button onclick="startMusic()">Start Audio</button>
+  <button onclick="stopMusic()">Stop Audio</button>
+</div>
 
-  <script>
-    const canvas = document.getElementById('bg');
-    const ctx = canvas.getContext('2d');
-    let w = canvas.width = window.innerWidth;
-    let h = canvas.height = window.innerHeight;
+<script>
+  // === Background Dots & Lines ===
+  const canvas = document.getElementById('bg');
+  const ctx = canvas.getContext('2d');
+  let width, height;
 
-    window.addEventListener('resize', () => {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
-    });
+  function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
 
-    const dots = Array.from({ length: 100 }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: (Math.random() - 0.5) * 0.3
-    }));
+  class Dot {
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.x = Math.random() * width;
+      this.y = Math.random() * height;
+      this.vx = (Math.random() - 0.5) * 0.15; // very slow
+      this.vy = (Math.random() - 0.5) * 0.15;
+      this.size = Math.random() * 2 + 1.5;
+      this.alpha = Math.random() * 0.4 + 0.3;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > width) this.vx *= -1;
+      if (this.y < 0 || this.y > height) this.vy *= -1;
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size, 0, 2 * Math.PI);
+      ctx.fillStyle = `rgba(0, 180, 255, ${this.alpha})`;
+      ctx.fill();
+    }
+  }
 
-    function drawBackground() {
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-      ctx.fillRect(0, 0, w, h);
+  const dots = [];
+  const DOT_COUNT = 120;
+  for (let i = 0; i < DOT_COUNT; i++) dots.push(new Dot());
 
-      for (let i = 0; i < dots.length; i++) {
-        const a = dots[i];
-        a.x += a.vx;
-        a.y += a.vy;
-        if (a.x < 0 || a.x > w) a.vx *= -1;
-        if (a.y < 0 || a.y > h) a.vy *= -1;
-
-        ctx.beginPath();
-        ctx.arc(a.x, a.y, 2, 0, Math.PI * 2);
-        ctx.fillStyle = '#00bfff';
-        ctx.fill();
-
-        for (let j = i + 1; j < dots.length; j++) {
-          const b = dots[j];
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 100) {
-            ctx.strokeStyle = `rgba(0,191,255, ${1 - dist / 100})`;
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-          }
+  function drawLines() {
+    for (let i = 0; i < DOT_COUNT; i++) {
+      const d1 = dots[i];
+      for (let j = i + 1; j < DOT_COUNT; j++) {
+        const d2 = dots[j];
+        const dx = d1.x - d2.x;
+        const dy = d1.y - d2.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) {
+          let alpha = 1 - dist / 150;
+          alpha *= 0.25; // max line alpha lower for subtlety
+          ctx.strokeStyle = `rgba(0, 180, 255, ${alpha.toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(d1.x, d1.y);
+          ctx.lineTo(d2.x, d2.y);
+          ctx.stroke();
         }
       }
-      requestAnimationFrame(drawBackground);
+    }
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, width, height);
+    for (const d of dots) {
+      d.update();
+      d.draw();
+    }
+    drawLines();
+    requestAnimationFrame(animate);
+  }
+  animate();
+
+  // === Audio ===
+  let audioCtx = null;
+  let isPlaying = false;
+  let currentVoices = [];
+
+  const instrumentSelector = document.getElementById('instrument');
+
+  // Utility: smooth random generator (Perlin-like)
+  // Using a simple easing for smoother randomness
+  class SmoothRandom {
+    constructor(smoothing = 0.03) {
+      this.value = Math.random();
+      this.smoothing = smoothing;
+    }
+    next() {
+      this.value += (Math.random() - 0.5) * this.smoothing * 2;
+      if (this.value < 0) this.value = 0;
+      if (this.value > 1) this.value = 1;
+      return this.value;
+    }
+  }
+
+  // Voice: 2 oscillators detuned, with filter & gain envelopes
+  class Voice {
+    constructor(freq, type, filterFreq) {
+      this.osc1 = audioCtx.createOscillator();
+      this.osc2 = audioCtx.createOscillator();
+      this.gainNode = audioCtx.createGain();
+      this.filter = audioCtx.createBiquadFilter();
+
+      this.osc1.type = type;
+      this.osc2.type = type;
+
+      // Slight detune for warmth
+      this.osc1.frequency.setValueAtTime(freq * 0.997, audioCtx.currentTime);
+      this.osc2.frequency.setValueAtTime(freq * 1.003, audioCtx.currentTime);
+
+      // Filter setup
+      this.filter.type = 'lowpass';
+      this.filter.frequency.setValueAtTime(filterFreq, audioCtx.currentTime);
+      this.filter.Q.value = 6;
+
+      this.osc1.connect(this.filter);
+      this.osc2.connect(this.filter);
+      this.filter.connect(this.gainNode);
+      this.gainNode.connect(audioCtx.destination);
+
+      this.gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+
+      this.osc1.start();
+      this.osc2.start();
+
+      this.alive = true;
     }
 
-    drawBackground();
+    update(freq, filterFreq, time) {
+      if (!this.alive) return;
 
-    // Audio logic
-    let audioCtx;
-    let musicInterval = null;
+      const now = audioCtx.currentTime;
 
-    function playTone(frequency, instrument) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      this.osc1.frequency.linearRampToValueAtTime(freq * 0.997, now + time);
+      this.osc2.frequency.linearRampToValueAtTime(freq * 1.003, now + time);
 
-      // Configure oscillator
-      osc.type = 'sine';
+      this.filter.frequency.linearRampToValueAtTime(filterFreq, now + time);
 
-      // Apply custom waveform based on selected instrument
-      switch (instrument) {
-        case 'synth':
-          osc.type = 'sine';
-          break;
-        case 'bell':
-          osc.type = 'sine';
-          break;
-        case 'piano':
-          osc.type = 'triangle';
-          break;
-        case 'choir':
-          osc.type = 'sawtooth';
-          break;
-      }
-
-      osc.frequency.value = frequency;
-      gain.gain.setValueAtTime(0.01 + Math.random() * 0.02, audioCtx.currentTime);
-
-      // Instrumental envelope
-      if (instrument === 'bell') {
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 2);
-      } else if (instrument === 'choir') {
-        gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
-      } else {
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
-      }
-
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-
-      osc.start();
-      osc.stop(audioCtx.currentTime + 3);
+      // Smooth gain envelope (attack 1.5s, release 2s)
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setTargetAtTime(0.07, now, 1.5);
     }
 
-    function startMusic() {
-      const instrument = document.getElementById("instrument").value;
+    stop() {
+      if (!this.alive) return;
+      const now = audioCtx.currentTime;
+      this.gainNode.gain.setTargetAtTime(0, now, 3);
+      this.osc1.stop(now + 4);
+      this.osc2.stop(now + 4);
+      this.alive = false;
+    }
+  }
 
-      if (!audioCtx || audioCtx.state === 'closed') {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
+  function getInstrumentSettings(name) {
+    switch (name) {
+      case 'flute':
+        return { type: 'sine', filterFreq: 1200 };
+      case 'piano':
+        return { type: 'triangle', filterFreq: 900 };
+      case 'bell':
+        return { type: 'square', filterFreq: 1800 };
+      case 'choir':
+        return { type: 'sawtooth', filterFreq: 800 };
+      default:
+        return { type: 'sine', filterFreq: 3000 }; // Synth
+    }
+  }
+
+  let freqRandom, filterRandom;
+  let updateInterval;
+
+  function startMusic() {
+    if (isPlaying) return;
+
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    freqRandom = new SmoothRandom(0.008);
+    filterRandom = new SmoothRandom(0.01);
+
+    isPlaying = true;
+    currentVoices = [];
+
+    function updateSound() {
+      if (!isPlaying) return;
+
+      const now = audioCtx.currentTime;
+      const instrument = instrumentSelector.value;
+      const settings = getInstrumentSettings(instrument);
+
+      // Smooth freq between 150Hz and 650Hz (limits high pitches)
+      const freqBase = 150 + freqRandom.next() * 500;
+
+      // Filter freq oscillates gently between base and +/- 300Hz
+      const filterFreq = settings.filterFreq + (filterRandom.next() - 0.5) * 600;
+
+      // Add a new voice every 1.5 seconds, max 4 voices max at once
+      if (currentVoices.length >= 4) {
+        const oldest = currentVoices.shift();
+        oldest.stop();
       }
 
-      if (!musicInterval) {
-        musicInterval = setInterval(() => {
-          // Play layered tones
-          for (let i = 0; i < 3; i++) {
-            const base = 200 + Math.random() * 300;
-            const detune = (Math.random() - 0.5) * 20;
-            playTone(base + detune, instrument);
-          }
-        }, 1800);
-      }
+      const voice = new Voice(freqBase, settings.type, filterFreq);
+      currentVoices.push(voice);
+
+      // Update each voice's freq & filter smoothly over 3 seconds
+      currentVoices.forEach((v, i) => {
+        const t = 3 + i * 0.1;
+        v.update(freqBase, filterFreq, t);
+      });
     }
 
-    function stopMusic() {
-      if (musicInterval) {
-        clearInterval(musicInterval);
-        musicInterval = null;
-      }
-      if (audioCtx && audioCtx.close) {
-        audioCtx.close();
-      }
-    }
-  </script>
+    updateSound();
+    updateInterval = setInterval(updateSound, 1500);
+  }
+
+  function stopMusic() {
+    if (!isPlaying) return;
+
+    isPlaying = false;
+    clearInterval(updateInterval);
+    currentVoices.forEach(v => v.stop());
+    currentVoices = [];
+  }
+</script>
 </body>
 </html>
