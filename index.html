@@ -1,211 +1,134 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Calm Electro Music Generator — PlantWave Style</title>
+<meta charset="UTF-8">
+<title>PlantWave-style Generator</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
-  body, html {
-    margin: 0; padding: 0; height: 100%;
-    font-family: 'Montserrat', sans-serif;
-    background: linear-gradient(135deg, #003366, #006699);
+  body {
+    margin: 0;
+    background: linear-gradient(135deg, #002244, #005577);
     color: #bbdefb;
-    overflow: hidden;
+    font-family: sans-serif;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
+    height: 100vh;
   }
   #app {
-    position: relative;
-    z-index: 2;
-    max-width: 400px;
-    width: 90vw;
-    background: rgba(0, 51, 102, 0.85);
-    border-radius: 12px;
+    background: rgba(0, 51, 102, 0.9);
     padding: 20px;
-    box-shadow: 0 0 30px #3399ffaa;
+    border-radius: 12px;
+    box-shadow: 0 0 20px #3399ff88;
     text-align: center;
-  }
-  h1 {
-    margin-bottom: 10px;
-    font-weight: 700;
-    color: #99ccff;
-  }
-  label {
-    display: block;
-    margin: 15px 0 5px;
-    font-weight: 600;
+    max-width: 400px;
+    width: 90%;
   }
   select, button {
-    width: 100%;
-    padding: 12px;
-    font-size: 1rem;
-    border-radius: 8px;
-    border: none;
-    background: #005f99;
-    color: #d0eaff;
-    cursor: pointer;
-    transition: background 0.3s ease;
-  }
-  select:hover, button:hover {
-    background: #3388cc;
-  }
-  #loading {
     margin-top: 10px;
-    font-size: 0.9rem;
-    color: #bbdefb;
-    min-height: 1.4em;
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: #005f99;
+    color: white;
+    font-size: 1em;
   }
 </style>
 </head>
 <body>
 <div id="app">
-  <h1>Calm Electro Music Generator</h1>
-  <label for="instrument">Select Instrument:</label>
+  <h1>PlantWave Music</h1>
   <select id="instrument">
-    <option value="synth">Synth (Raw Wave)</option>
-    <option value="flute">Soft Flute</option>
-    <option value="piano">Warm Piano</option>
-    <option value="pad">Dreamy Pad</option>
-    <option value="bell">Gentle Bell</option>
+    <option value="synth">Synth (Raw)</option>
+    <option value="flute">Flute</option>
+    <option value="piano">Piano</option>
+    <option value="pad">Pad</option>
+    <option value="bell">Bell</option>
   </select>
-
   <button id="startStopBtn">Start Music</button>
-  <div id="loading"></div>
 </div>
 
 <script>
-(() => {
-  const AudioContext = window.AudioContext || window.webkitAudioContext;
-  let audioCtx = null;
-  let osc1 = null, osc2 = null, osc3 = null;
-  let gainNode = null;
-  let filterNode = null;
-  let noiseNode = null;
-  let noiseGain = null;
-  let isPlaying = false;
+let audioCtx = null;
+let osc1, osc2, osc3, gainNode, noiseNode, noiseGain, filterNode;
+let isPlaying = false;
 
-  const instrumentSelect = document.getElementById('instrument');
-  const startStopBtn = document.getElementById('startStopBtn');
+const instrumentSelect = document.getElementById('instrument');
+const startStopBtn = document.getElementById('startStopBtn');
 
-  // Create LFO helper for smooth slow modulation
-  function createLFO(freq, depth, type = 'sine') {
-    const osc = audioCtx.createOscillator();
-    osc.type = type;
-    osc.frequency.value = freq;
+function createLFO(freq, depth) {
+  const lfo = audioCtx.createOscillator();
+  const lfoGain = audioCtx.createGain();
+  lfo.type = 'sine';
+  lfo.frequency.value = freq;
+  lfoGain.gain.value = depth;
+  lfo.connect(lfoGain);
+  lfo.start();
+  return lfoGain;
+}
 
-    const gain = audioCtx.createGain();
-    gain.gain.value = depth;
-
-    osc.connect(gain);
-    osc.start();
-
-    return gain;
+function createNoise() {
+  const bufferSize = audioCtx.sampleRate * 2;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * 0.1; // increased from 0.03
   }
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  noise.loop = true;
+  return noise;
+}
 
-  // Create subtle white noise source
-  function createNoiseBuffer() {
-    const bufferSize = audioCtx.sampleRate * 2; // 2 seconds buffer
-    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * 0.03; // very low amplitude noise
-    }
-    return buffer;
+function applyFilter(type) {
+  if (filterNode) filterNode.disconnect();
+  filterNode = audioCtx.createBiquadFilter();
+  switch(type) {
+    case 'flute': filterNode.type = 'bandpass'; filterNode.frequency.value = 1100; filterNode.Q.value = 10; break;
+    case 'piano': filterNode.type = 'lowpass'; filterNode.frequency.value = 1400; filterNode.Q.value = 6; break;
+    case 'pad':   filterNode.type = 'lowpass'; filterNode.frequency.value = 800; filterNode.Q.value = 1.2; break;
+    case 'bell':  filterNode.type = 'peaking'; filterNode.frequency.value = 2500; filterNode.Q.value = 15; filterNode.gain.value = 8; break;
+    case 'synth':
+    default: return null;
   }
+  return filterNode;
+}
 
-  // Apply instrument filter with gentle tweaks
-  function applyInstrumentFilter(type) {
-    if (filterNode) filterNode.disconnect();
+startStopBtn.addEventListener('click', () => {
+  if (!isPlaying) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    filterNode = audioCtx.createBiquadFilter();
-
-    switch(type) {
-      case 'flute':
-        filterNode.type = 'bandpass';
-        filterNode.frequency.value = 1100;
-        filterNode.Q.value = 10;
-        break;
-      case 'piano':
-        filterNode.type = 'lowpass';
-        filterNode.frequency.value = 1400;
-        filterNode.Q.value = 6;
-        break;
-      case 'pad':
-        filterNode.type = 'lowpass';
-        filterNode.frequency.value = 800;
-        filterNode.Q.value = 1.2;
-        break;
-      case 'bell':
-        filterNode.type = 'peaking';
-        filterNode.frequency.value = 2500;
-        filterNode.Q.value = 15;
-        filterNode.gain.value = 8;
-        break;
-      case 'synth':
-      default:
-        filterNode.disconnect();
-        filterNode = null;
-        break;
-    }
-    return filterNode;
-  }
-
-  function startAudio() {
-    if (isPlaying) return;
-    audioCtx = new AudioContext();
-
-    // Three oscillators detuned slightly for soft beating
     osc1 = audioCtx.createOscillator();
     osc2 = audioCtx.createOscillator();
     osc3 = audioCtx.createOscillator();
 
-    osc1.type = 'triangle';
-    osc2.type = 'triangle';
-    osc3.type = 'triangle';
+    osc1.type = osc2.type = osc3.type = 'triangle';
+    osc1.frequency.value = 220;
+    osc2.frequency.value = 220 * 1.005;
+    osc3.frequency.value = 220 * 0.997;
 
-    const baseFreq = 220; // A3
-    osc1.frequency.value = baseFreq;
-    osc2.frequency.value = baseFreq * 1.005; // slight detune +0.5%
-    osc3.frequency.value = baseFreq * 0.997; // slight detune -0.3%
-
-    // Gain node controls overall volume and modulation
     gainNode = audioCtx.createGain();
-    gainNode.gain.value = 0.25;
+    gainNode.gain.value = 0.4; // louder
 
-    // Create slow LFOs for subtle freq modulation (0.05Hz) and amplitude (0.03Hz)
-    // LFO amplitude smaller for smooth organic feel
-    const freqLFO1 = createLFO(0.05, 4);
-    const freqLFO2 = createLFO(0.043, 3);
-    const ampLFO = createLFO(0.03, 0.12);
-
-    freqLFO1.connect(osc1.frequency);
-    freqLFO2.connect(osc2.frequency);
+    const ampLFO = createLFO(0.03, 0.2);
     ampLFO.connect(gainNode.gain);
 
-    // Noise source mixed softly for organic texture
-    const noiseBuffer = createNoiseBuffer();
-    noiseNode = audioCtx.createBufferSource();
-    noiseNode.buffer = noiseBuffer;
-    noiseNode.loop = true;
+    const freqLFO1 = createLFO(0.05, 3);
+    const freqLFO2 = createLFO(0.07, 2);
+    freqLFO1.connect(osc1.frequency);
+    freqLFO2.connect(osc2.frequency);
 
+    noiseNode = createNoise();
     noiseGain = audioCtx.createGain();
     noiseGain.gain.value = 0.05;
 
-    noiseNode.connect(noiseGain);
+    const filter = applyFilter(instrumentSelect.value);
 
-    // Filter according to instrument choice
-    const inst = instrumentSelect.value;
-    const filter = applyInstrumentFilter(inst);
-
-    // Connect oscillators together to gain
     osc1.connect(gainNode);
     osc2.connect(gainNode);
     osc3.connect(gainNode);
+    noiseNode.connect(noiseGain);
 
-    // Mix noise after gain node to filter and destination
     if (filter) {
       gainNode.connect(filter);
       noiseGain.connect(filter);
@@ -216,57 +139,28 @@
     }
 
     noiseNode.start();
-
-    osc1.start();
-    osc2.start();
-    osc3.start();
+    osc1.start(); osc2.start(); osc3.start();
 
     isPlaying = true;
-    startStopBtn.textContent = 'Stop Music';
-  }
-
-  function stopAudio() {
-    if (!isPlaying) return;
-
-    osc1.stop();
-    osc2.stop();
-    osc3.stop();
-    noiseNode.stop();
-
-    osc1.disconnect();
-    osc2.disconnect();
-    osc3.disconnect();
-    noiseNode.disconnect();
-    noiseGain.disconnect();
-    gainNode.disconnect();
+    startStopBtn.textContent = "Stop Music";
+  } else {
+    osc1.stop(); osc2.stop(); osc3.stop(); noiseNode.stop();
+    osc1.disconnect(); osc2.disconnect(); osc3.disconnect();
+    gainNode.disconnect(); noiseGain.disconnect();
     if (filterNode) filterNode.disconnect();
-
     audioCtx.close();
 
-    audioCtx = null;
-    osc1 = null; osc2 = null; osc3 = null;
-    noiseNode = null; noiseGain = null;
-    gainNode = null;
-    filterNode = null;
     isPlaying = false;
-    startStopBtn.textContent = 'Start Music';
+    startStopBtn.textContent = "Start Music";
   }
+});
 
-  startStopBtn.addEventListener('click', () => {
-    if (!isPlaying) {
-      startAudio();
-    } else {
-      stopAudio();
-    }
-  });
-
-  instrumentSelect.addEventListener('change', () => {
-    if (isPlaying) {
-      stopAudio();
-      startAudio();
-    }
-  });
-})();
+instrumentSelect.addEventListener('change', () => {
+  if (isPlaying) {
+    startStopBtn.click(); // stop
+    setTimeout(() => startStopBtn.click(), 100); // restart
+  }
+});
 </script>
 </body>
 </html>
