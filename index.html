@@ -151,8 +151,10 @@
     let audioCtx;
     let isPlaying = false;
     let currentVoices = [];
+    let calmness = 0.5; // Controls chaos and pitch build-up
+    let lastFreq = 300;
+    let lastCutoff = 1000;
 
-    // Settings per instrument for base osc type & filter frequency
     function getInstrumentSettings(name) {
       switch (name) {
         case 'flute':
@@ -168,7 +170,6 @@
       }
     }
 
-    // Gentle, slow noise-based smoothness generator (returns value in 0-1)
     function smoothRandom(prev) {
       const change = (Math.random() - 0.5) * 0.06;
       let next = prev + change;
@@ -177,7 +178,6 @@
       return next;
     }
 
-    // Layer voice class with two oscillators detuned gently, smooth envelopes
     class Voice {
       constructor(freq, instrumentSettings) {
         this.freq = freq;
@@ -205,8 +205,10 @@
         this.osc2.frequency.setValueAtTime(this.freq * 1.01, audioCtx.currentTime);
 
         this.gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        this.gainNode.gain.linearRampToValueAtTime(0.07, audioCtx.currentTime + 1);
-
+        this.gainNode.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 1); // volume UP
+        // gradual decay
+        this.gainNode.gain.linearRampToValueAtTime(0.07, audioCtx.currentTime + 4);
+        
         this.osc1.start();
         this.osc2.start();
 
@@ -217,11 +219,9 @@
         if (!this.alive) return;
         const now = audioCtx.currentTime;
 
-        // Smooth freq changes with exponential approach
         this.osc1.frequency.setTargetAtTime(freq, now, 0.1);
         this.osc2.frequency.setTargetAtTime(freq * 1.01, now, 0.1);
 
-        // Smooth filter cutoff changes
         this.filter.frequency.setTargetAtTime(cutoff, now, 0.2);
       }
       stop() {
@@ -235,16 +235,18 @@
       }
     }
 
-    let calmness = 0.5; // 0..1 controls chaos and high pitch presence
-
-    let lastFreq = 300;
-    let lastCutoff = 1000;
-
-    function startMusic() {
+    async function startMusic() {
       if (isPlaying) return;
       isPlaying = true;
 
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      try {
+        await audioCtx.resume();
+      } catch (e) {
+        console.warn('AudioContext resume failed:', e);
+      }
 
       const instrument = document.getElementById('instrument').value;
       const settings = getInstrumentSettings(instrument);
@@ -252,35 +254,27 @@
       function generateNote() {
         if (!isPlaying) return;
 
-        // Slowly vary calmness to build/reduce chaos
         calmness = smoothRandom(calmness);
 
-        // Frequency base, weighted by calmness (less chaos = fewer high pitches)
         const baseFreq = 150 + calmness * 650;
-        // Add slow random modulation to freq for smooth variation
         let freq = lastFreq + (Math.random() - 0.5) * 80 * calmness;
         freq = Math.min(Math.max(freq, 150), baseFreq);
         lastFreq = freq;
 
-        // Filter cutoff varies with calmness & freq to keep ethereal warmth
         let cutoff = lastCutoff + (Math.random() - 0.5) * 300;
         cutoff = Math.min(Math.max(cutoff, 600), settings.filterFreq);
         lastCutoff = cutoff;
 
-        // Create layered voice
         const voice = new Voice(freq, settings);
         voice.update(freq, cutoff);
         currentVoices.push(voice);
 
-        // Remove old voices to keep things light & clean
         if (currentVoices.length > 15) {
           const oldVoice = currentVoices.shift();
           oldVoice.stop();
         }
 
-        // Schedule next note: longer pause if calmness low (less chaotic)
         const nextInMs = 1200 - calmness * 800 + Math.random() * 400;
-
         setTimeout(generateNote, nextInMs);
       }
 
@@ -290,7 +284,7 @@
     function stopMusic() {
       if (!isPlaying) return;
       isPlaying = false;
-      currentVoices.forEach(v => v.stop());
+      currentVoices.forEach((v) => v.stop());
       currentVoices = [];
     }
   </script>
