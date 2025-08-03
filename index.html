@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Electric Music Generator</title>
-<style>
+  <meta charset="UTF-8">
+  <title>Electric Music Generator</title>
+  <style>
   body {
     margin: 0;
     background: black;
@@ -50,24 +50,31 @@
     margin-bottom: 20px;
     text-shadow: 0 0 10px #00ffff;
   }
-</style>
+  </style>
 </head>
 <body>
-<canvas id="bg"></canvas>
-<div id="ui">
-  <h1>Electric Music Generator</h1>
-  <select id="instrument">
-    <option value="synth">Synth (Smooth)</option>
-    <option value="flute">Flute</option>
-    <option value="piano">Piano</option>
-    <option value="bell">Bell</option>
-    <option value="choir">Choir</option>
-  </select><br />
-  <button onclick="startMusic()">Start Audio</button>
-  <button onclick="stopMusic()">Stop Audio</button>
-</div>
-
-<script>
+  <canvas id="bg"></canvas>
+  <div id="ui">
+    <h1>Electric Music Generator</h1><select id="instrument">
+      <option value="synth">
+        Synth (Smooth)
+      </option>
+      <option value="flute">
+        Flute
+      </option>
+      <option value="piano">
+        Piano
+      </option>
+      <option value="bell">
+        Bell
+      </option>
+      <option value="choir">
+        Choir
+      </option>
+    </select><br>
+    <button onclick="startMusic()">Start Audio</button> <button onclick="stopMusic()">Stop Audio</button>
+  </div>
+  <script>
   // === Background Dots & Lines ===
   const canvas = document.getElementById('bg');
   const ctx = canvas.getContext('2d');
@@ -269,6 +276,6 @@
     currentVoices.forEach(v => v.stop());
     currentVoices = [];
   }
-</script>
+  </script>
 </body>
 </html>
