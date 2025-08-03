@@ -80,31 +80,7 @@
   window.addEventListener('resize', resize);
   resize();
 
-  class Dot {
-    constructor() {
-      this.reset();
-    }
-    reset() {
-      this.x = Math.random() * width;
-      this.y = Math.random() * height;
-      this.vx = (Math.random() - 0.5) * 0.15; // very slow
-      this.vy = (Math.random() - 0.5) * 0.15;
-      this.size = Math.random() * 2 + 1.5;
-      this.alpha = Math.random() * 0.4 + 0.3;
-    }
-    update() {
-      this.x += this.vx;
-      this.y += this.vy;
-      if (this.x < 0 || this.x > width) this.vx *= -1;
-      if (this.y < 0 || this.y > height) this.vy *= -1;
-    }
-    draw() {
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size, 0, 2 * Math.PI);
-      ctx.fillStyle = `rgba(0, 180, 255, ${this.alpha})`;
-      ctx.fill();
-    }
-  }
+  resize();
 
   const dots = [];
   const DOT_COUNT = 120;
