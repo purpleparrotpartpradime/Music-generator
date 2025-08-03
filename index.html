@@ -44,8 +44,7 @@
       margin-bottom: 20px;
       text-shadow: 0 0 10px #00ffff;
     }
-    /* Hide the sneaky video */
-    #dummyVideo {
+    #dummyVideo, #dummyAudio {
       position: fixed;
       width: 1px;
       height: 1px;
@@ -62,9 +61,13 @@
   <!-- Sneaky muted autoplay looping video to unlock audio -->
   <video id="dummyVideo" muted autoplay loop playsinline>
     <source src="data:video/webm;base64,GkXfo0AgQoaBAULAAEAAAAMAoAAAQAAGAAAAAYAAABsAAABAAQA=" type="video/webm" />
-    <!-- fallback text -->
     Your browser does not support the video tag.
   </video>
+
+  <!-- Extra silent audio loop to assist autoplay -->
+  <audio id="dummyAudio" autoplay loop muted playsinline>
+    <source src="data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCAeAAACABAAZGF0YQAAAAA=" type="audio/mp3" />
+  </audio>
 
   <div id="ui">
     <h1>Electric Music Generator</h1>
@@ -93,14 +96,12 @@
     resize();
 
     class Dot {
-      constructor() {
-        this.reset();
-      }
+      constructor() { this.reset(); }
       reset() {
         this.x = Math.random() * width;
         this.y = Math.random() * height;
-        this.vx = (Math.random() - 0.5) * 0.7;
-        this.vy = (Math.random() - 0.5) * 0.7,
+        this.vx = (Math.random() - 0.5) * 0.2;
+        this.vy = (Math.random() - 0.5) * 0.2;
         this.size = 1 + Math.random() * 2;
         this.alpha = 0.3 + Math.random() * 0.7;
       }
@@ -114,12 +115,8 @@
         ctx.beginPath();
         const glowRadius = this.size * 6;
         let grad = ctx.createRadialGradient(
-          this.x,
-          this.y,
-          this.size * 0.5,
-          this.x,
-          this.y,
-          glowRadius
+          this.x, this.y, this.size * 0.5,
+          this.x, this.y, glowRadius
         );
         grad.addColorStop(0, `rgba(0, 180, 255, ${this.alpha})`);
         grad.addColorStop(1, 'rgba(0, 180, 255, 0)');
@@ -169,37 +166,30 @@
     let audioCtx;
     let isPlaying = false;
     let currentVoices = [];
-    let calmness = 0.5; // Controls chaos and pitch build-up
+    let calmness = 0.5;
     let lastFreq = 300;
     let lastCutoff = 1000;
 
     function getInstrumentSettings(name) {
       switch (name) {
-        case 'flute':
-          return { type: 'sine', filterFreq: 1400 };
-        case 'piano':
-          return { type: 'triangle', filterFreq: 1100 };
-        case 'bell':
-          return { type: 'square', filterFreq: 1800 };
-        case 'choir':
-          return { type: 'sawtooth', filterFreq: 900 };
-        default:
-          return { type: 'sine', filterFreq: 2800 }; // synth smooth
+        case 'flute': return { type: 'sine', filterFreq: 1400 };
+        case 'piano': return { type: 'triangle', filterFreq: 1100 };
+        case 'bell': return { type: 'square', filterFreq: 1800 };
+        case 'choir': return { type: 'sawtooth', filterFreq: 900 };
+        default: return { type: 'sine', filterFreq: 2800 };
       }
     }
 
     function smoothRandom(prev) {
       const change = (Math.random() - 0.5) * 0.06;
       let next = prev + change;
-      if (next > 1) next = 1;
-      if (next < 0) next = 0;
-      return next;
+      return Math.max(0, Math.min(1, next));
     }
 
     class Voice {
-      constructor(freq, instrumentSettings) {
+      constructor(freq, settings) {
         this.freq = freq;
-        this.settings = instrumentSettings;
+        this.settings = settings;
 
         this.osc1 = audioCtx.createOscillator();
         this.osc2 = audioCtx.createOscillator();
@@ -208,7 +198,7 @@
 
         this.osc1.type = this.settings.type;
         this.osc2.type = this.settings.type;
-        this.osc2.detune.value = 10; // slight detune for layering
+        this.osc2.detune.value = 10;
 
         this.filter.type = 'lowpass';
         this.filter.frequency.value = this.settings.filterFreq;
@@ -219,26 +209,23 @@
         this.filter.connect(this.gainNode);
         this.gainNode.connect(audioCtx.destination);
 
-        this.osc1.frequency.setValueAtTime(this.freq, audioCtx.currentTime);
-        this.osc2.frequency.setValueAtTime(this.freq * 1.01, audioCtx.currentTime);
+        this.osc1.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        this.osc2.frequency.setValueAtTime(freq * 1.01, audioCtx.currentTime);
 
         this.gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        this.gainNode.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 1); // volume UP
+        this.gainNode.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 1);
         this.gainNode.gain.linearRampToValueAtTime(0.07, audioCtx.currentTime + 4);
-        
+
         this.osc1.start();
         this.osc2.start();
 
-        this.startTime = audioCtx.currentTime;
         this.alive = true;
       }
       update(freq, cutoff) {
         if (!this.alive) return;
         const now = audioCtx.currentTime;
-
         this.osc1.frequency.setTargetAtTime(freq, now, 0.1);
         this.osc2.frequency.setTargetAtTime(freq * 1.01, now, 0.1);
-
         this.filter.frequency.setTargetAtTime(cutoff, now, 0.2);
       }
       stop() {
@@ -256,23 +243,38 @@
       if (isPlaying) return;
       isPlaying = true;
 
+      const dummyVideo = document.getElementById('dummyVideo');
+      const dummyAudio = document.getElementById('dummyAudio');
+
+      try {
+        await dummyVideo.play();
+        await dummyAudio.play();
+      } catch (err) {
+        console.warn('Media elements failed to autoplay:', err);
+      }
+
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
+
       try {
         await audioCtx.resume();
       } catch (e) {
         console.warn('AudioContext resume failed:', e);
       }
 
+      setTimeout(() => {
+        if (audioCtx.state !== 'running') {
+          audioCtx.resume().catch(() => {});
+        }
+      }, 400);
+
       const instrument = document.getElementById('instrument').value;
       const settings = getInstrumentSettings(instrument);
 
       function generateNote() {
         if (!isPlaying) return;
-
         calmness = smoothRandom(calmness);
-
         const baseFreq = 150 + calmness * 650;
         let freq = lastFreq + (Math.random() - 0.5) * 80 * calmness;
         freq = Math.min(Math.max(freq, 150), baseFreq);
@@ -285,7 +287,6 @@
         const voice = new Voice(freq, settings);
         voice.update(freq, cutoff);
         currentVoices.push(voice);
-
         if (currentVoices.length > 15) {
           const oldVoice = currentVoices.shift();
           oldVoice.stop();
