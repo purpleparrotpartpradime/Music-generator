@@ -77,10 +77,11 @@
   </select>
   <br>
   <button id="startBtn">Start Music</button>
+  <button id="stopBtn">Stop Music</button>
 </div>
 
 <script>
-  // Background Glow Animation
+  // Background glow
   const canvas = document.getElementById("bg");
   const ctx = canvas.getContext("2d");
   let w, h;
@@ -120,10 +121,13 @@
 <script>
   let audioCtx;
   let gainNode;
+  let intervalId;
   let isPlaying = false;
+  const oscillators = [];
 
   const instrumentSelector = document.getElementById("instrument");
   const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
 
   startBtn.addEventListener("click", () => {
     if (isPlaying) return;
@@ -133,39 +137,64 @@
     gainNode.gain.value = 0.1;
     gainNode.connect(audioCtx.destination);
 
-    startElectricTones();
     isPlaying = true;
+    startElectricWaves();
   });
 
-  function startElectricTones() {
-    let lastVal = Math.random();
-    setInterval(() => {
-      let signal = lastVal + (Math.random() - 0.5) * 0.1;
-      signal = Math.max(0, Math.min(1, signal));
-      lastVal = signal;
+  stopBtn.addEventListener("click", () => {
+    if (!isPlaying) return;
 
-      const freq = 220 + signal * 400;
+    clearInterval(intervalId);
+    oscillators.forEach(o => {
+      try {
+        o.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5);
+        o.osc.stop(audioCtx.currentTime + 1);
+      } catch (e) {}
+    });
+    oscillators.length = 0;
+    isPlaying = false;
+  });
+
+  function startElectricWaves() {
+    let lastVal = Math.random();
+
+    intervalId = setInterval(() => {
+      const signal = Math.max(0, Math.min(1, lastVal + (Math.random() - 0.5) * 0.05));
+      lastVal = signal;
+      const freq = 120 + signal * 600;
 
       const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
       const instrument = instrumentSelector.value;
 
       if (["sine", "square", "triangle", "sawtooth"].includes(instrument)) {
         osc.type = instrument;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        osc.connect(gainNode);
       } else {
         const filter = audioCtx.createBiquadFilter();
         filter.type = instrument;
         filter.frequency.setValueAtTime(500, audioCtx.currentTime);
         osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
         osc.connect(filter);
-        filter.connect(gainNode);
+        filter.connect(gain);
       }
 
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 1);
+      gain.gain.setTargetAtTime(0, audioCtx.currentTime + 4, 1);
+
+      osc.connect(gain);
+      gain.connect(gainNode);
+
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.25);
-    }, 400);
+      osc.stop(audioCtx.currentTime + 6);
+
+      oscillators.push({ osc, gain });
+
+      // Trim old oscillators
+      if (oscillators.length > 20) oscillators.splice(0, 5);
+    }, 1000);
   }
 </script>
 
