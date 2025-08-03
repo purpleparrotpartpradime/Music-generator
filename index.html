@@ -1,195 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Electric Music Generator</title>
   <style>
-    body {
+    html, body {
       margin: 0;
-      background: black;
+      padding: 0;
+      background: radial-gradient(ellipse at center, #020202 0%, #000000 100%);
+      height: 100%;
+      color: #aaddff;
       font-family: 'Segoe UI', sans-serif;
-      color: #cceaff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       overflow: hidden;
     }
 
-    canvas {
-      position: fixed;
-      top: 0;
-      left: 0;
-      z-index: 0;
-    }
-
-    #ui {
-      position: absolute;
-      top: 40px;
-      left: 50%;
-      transform: translateX(-50%);
+    .container {
+      background: rgba(0, 32, 64, 0.25);
+      border: 2px solid #2bb3ff;
+      border-radius: 20px;
+      padding: 40px;
       text-align: center;
-      z-index: 1;
-    }
-
-    select, button {
-      background-color: #001f33;
-      border: 2px solid #00aaff;
-      color: white;
-      font-size: 18px;
-      padding: 10px 20px;
-      margin: 10px;
-      border-radius: 10px;
-      cursor: pointer;
+      box-shadow: 0 0 30px #0af;
     }
 
     h1 {
-      font-size: 42px;
+      font-size: 2em;
       margin-bottom: 20px;
-      text-shadow: 0 0 10px #00ffff;
+    }
+
+    select, button {
+      font-size: 1.2em;
+      margin: 10px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      background: #003f7f;
+      color: #aaddff;
+      box-shadow: 0 0 10px #00aaff;
+      cursor: pointer;
+    }
+
+    button:hover, select:hover {
+      background: #005fa3;
     }
   </style>
 </head>
 <body>
-<canvas id="bg"></canvas>
-<div id="ui">
-  <h1>Electric Music Generator</h1>
-  <select id="instrument">
-    <option value="synth">Synth (Smooth)</option>
-    <option value="flute">Flute</option>
-    <option value="piano">Piano</option>
-    <option value="bell">Bell</option>
-    <option value="choir">Choir</option>
-  </select><br>
-  <button onclick="startMusic()">Start Audio</button>
-  <button onclick="stopMusic()">Stop Audio</button>
-</div>
+  <div class="container">
+    <h1>Electric Music Generator</h1>
+    <select id="instrument">
+      <option value="sine">Synth (Pure)</option>
+      <option value="triangle">Triangle</option>
+      <option value="square">Square</option>
+      <option value="sawtooth">Sawtooth</option>
+    </select>
+    <br>
+    <button onclick="startMusic()">Start</button>
+    <button onclick="stopMusic()">Stop</button>
+  </div>
 
-<script>
-  const canvas = document.getElementById('bg');
-  const ctx = canvas.getContext('2d');
-  let width, height;
+  <script>
+    let ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let playing = false;
+    let nodes = [];
+    let interval;
 
-  function resize() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resize);
-  resize();
+    function generateLayeredNote(freq, type) {
+      const baseGain = ctx.createGain();
+      baseGain.gain.value = 0.05;
+      baseGain.connect(ctx.destination);
 
-  let particles = [];
+      const detuneRange = 0.5; // Slight natural detuning
 
-  class Particle {
-    constructor() {
-      this.reset();
-    }
-    reset() {
-      this.x = Math.random() * width;
-      this.y = Math.random() * height;
-      this.vx = (Math.random() - 0.5) * 0.5;
-      this.vy = (Math.random() - 0.5) * 0.5;
-      this.size = Math.random() * 3 + 1;
-      this.alpha = Math.random() * 0.5 + 0.2;
-    }
-    update() {
-      this.x += this.vx;
-      this.y += this.vy;
-      if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
-        this.reset();
+      // Layered oscillators
+      for (let i = 0; i < 3; i++) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = type;
+        osc.frequency.value = freq + (Math.random() - 0.5) * detuneRange;
+
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.03, ctx.currentTime + 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 5);
+
+        filter.type = "lowpass";
+        filter.frequency.value = 1200;
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(baseGain);
+
+        osc.start();
+        osc.stop(ctx.currentTime + 6);
+        nodes.push(osc);
       }
-    }
-    draw(ctx) {
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size, 0, 2 * Math.PI);
-      ctx.fillStyle = `rgba(0, 170, 255, ${this.alpha})`;
-      ctx.fill();
-    }
-  }
 
-  for (let i = 0; i < 100; i++) {
-    particles.push(new Particle());
-  }
+      // Add filtered soft white noise
+      const bufferSize = 2 * ctx.sampleRate;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * 0.25;
+      }
 
-  function animate() {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(0, 0, width, height);
-    for (let p of particles) {
-      p.update();
-      p.draw(ctx);
-    }
-    requestAnimationFrame(animate);
-  }
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      noise.loop = false;
 
-  animate();
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = 'lowpass';
+      noiseFilter.frequency.value = 600;
 
-  // === AUDIO ===
-  let audioCtx;
-  let isPlaying = false;
-  let currentOscillators = [];
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.01, ctx.currentTime);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 4);
 
-  function getInstrumentSettings(name) {
-    switch (name) {
-      case 'flute':
-        return { type: 'sine', filterFreq: 1500 };
-      case 'piano':
-        return { type: 'triangle', filterFreq: 1000 };
-      case 'bell':
-        return { type: 'square', filterFreq: 2000 };
-      case 'choir':
-        return { type: 'sawtooth', filterFreq: 800 };
-      default:
-        return { type: 'sine', filterFreq: 3000 }; // Synth
-    }
-  }
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
 
-  function startMusic() {
-    if (isPlaying) return;
-    isPlaying = true;
-
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      noise.start();
+      noise.stop(ctx.currentTime + 4);
     }
 
-    const instrument = document.getElementById('instrument').value;
-    const settings = getInstrumentSettings(instrument);
+    function startMusic() {
+      if (playing) return;
+      playing = true;
 
-    function playTone() {
-      if (!isPlaying) return;
+      const type = document.getElementById('instrument').value;
 
-      const now = audioCtx.currentTime;
-      const freq = 200 + Math.random() * 800;
-      const duration = 2 + Math.random() * 3;
-
-      const osc = audioCtx.createOscillator();
-      osc.type = settings.type;
-      osc.frequency.setValueAtTime(freq, now);
-
-      const gain = audioCtx.createGain();
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.1, now + 0.2);
-      gain.gain.linearRampToValueAtTime(0.05, now + duration - 0.5);
-      gain.gain.linearRampToValueAtTime(0, now + duration);
-
-      const filter = audioCtx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(settings.filterFreq, now);
-      filter.Q.value = 8;
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(now);
-      osc.stop(now + duration);
-
-      currentOscillators.push(osc);
-
-      setTimeout(playTone, duration * 1000);
+      interval = setInterval(() => {
+        let baseFreq = 100; // Lower base frequency
+        let freq = baseFreq + Math.pow(Math.random(), 2.2) * 600;
+        generateLayeredNote(freq, type);
+      }, 700 + Math.random() * 200);
     }
 
-    playTone();
-  }
-
-  function stopMusic() {
-    isPlaying = false;
-    currentOscillators.forEach(o => o.stop());
-    currentOscillators = [];
-  }
-</script>
+    function stopMusic() {
+      playing = false;
+      clearInterval(interval);
+      nodes.forEach(n => n.stop());
+      nodes = [];
+    }
+  </script>
 </body>
 </html>
