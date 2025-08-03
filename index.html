@@ -100,7 +100,7 @@
   }));
 
   function draw() {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
     ctx.fillRect(0, 0, w, h);
     for (let p of sparks) {
       ctx.beginPath();
@@ -118,58 +118,54 @@
 </script>
 
 <script>
-  let audioCtx, gainNode, filterNode;
+  let audioCtx;
+  let gainNode;
   let isPlaying = false;
 
   const instrumentSelector = document.getElementById("instrument");
   const startBtn = document.getElementById("startBtn");
 
-  startBtn.onclick = async () => {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-
+  startBtn.addEventListener("click", () => {
     if (isPlaying) return;
 
-    isPlaying = true;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     gainNode = audioCtx.createGain();
     gainNode.gain.value = 0.1;
     gainNode.connect(audioCtx.destination);
 
-    generateElectricMusic();
-  };
+    startElectricTones();
+    isPlaying = true;
+  });
 
-  function generateElectricMusic() {
+  function startElectricTones() {
     let lastVal = Math.random();
     setInterval(() => {
-      let signal = lastVal + (Math.random() - 0.5) * 0.05;
-      signal = Math.max(0, Math.min(1, signal)); // Clamp
+      let signal = lastVal + (Math.random() - 0.5) * 0.1;
+      signal = Math.max(0, Math.min(1, signal));
       lastVal = signal;
 
-      let freq = 200 + signal * 600; // between 200Hz and 800Hz
+      const freq = 220 + signal * 400;
 
       const osc = audioCtx.createOscillator();
-      const selected = instrumentSelector.value;
+      const instrument = instrumentSelector.value;
 
-      if (["sine", "triangle", "square", "sawtooth"].includes(selected)) {
-        osc.type = selected;
+      if (["sine", "square", "triangle", "sawtooth"].includes(instrument)) {
+        osc.type = instrument;
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
         osc.connect(gainNode);
       } else {
-        // Use default synth with filter
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = instrument;
+        filter.frequency.setValueAtTime(500, audioCtx.currentTime);
         osc.type = "sine";
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
-        filterNode = audioCtx.createBiquadFilter();
-        filterNode.type = selected === "lowpass" ? "lowpass" : "highpass";
-        filterNode.frequency.setValueAtTime(500, audioCtx.currentTime);
-        osc.connect(filterNode);
-        filterNode.connect(gainNode);
+        osc.connect(filter);
+        filter.connect(gainNode);
       }
 
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.3); // short tone
-    }, 350);
+      osc.stop(audioCtx.currentTime + 0.25);
+    }, 400);
   }
 </script>
 
