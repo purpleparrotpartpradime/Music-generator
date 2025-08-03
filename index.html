@@ -68,64 +68,36 @@
     let nodes = [];
     let interval;
 
-    function generateLayeredNote(freq, type) {
-      const baseGain = ctx.createGain();
-      baseGain.gain.value = 0.05;
-      baseGain.connect(ctx.destination);
+    function generateNote(freq, instrumentType) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
 
-      const detuneRange = 0.5; // Slight natural detuning
+      osc.type = instrumentType;
+      osc.frequency.value = freq;
 
-      // Layered oscillators
-      for (let i = 0; i < 3; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        const filter = ctx.createBiquadFilter();
+      // Smooth fade in/out
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 3.5);
 
-        osc.type = type;
-        osc.frequency.value = freq + (Math.random() - 0.5) * detuneRange;
+      // Soften high-pitched tones
+      filter.type = "lowpass";
+      filter.frequency.value = 1800; // Cut off high sharpness
 
-        gain.gain.setValueAtTime(0, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.03, ctx.currentTime + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 5);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
 
-        filter.type = "lowpass";
-        filter.frequency.value = 1200;
+      osc.start();
+      osc.stop(ctx.currentTime + 4);
 
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(baseGain);
+      nodes.push(osc);
 
-        osc.start();
-        osc.stop(ctx.currentTime + 6);
-        nodes.push(osc);
-      }
-
-      // Add filtered soft white noise
-      const bufferSize = 2 * ctx.sampleRate;
-      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const output = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        output[i] = (Math.random() * 2 - 1) * 0.25;
-      }
-
-      const noise = ctx.createBufferSource();
-      noise.buffer = noiseBuffer;
-      noise.loop = false;
-
-      const noiseFilter = ctx.createBiquadFilter();
-      noiseFilter.type = 'lowpass';
-      noiseFilter.frequency.value = 600;
-
-      const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(0.01, ctx.currentTime);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 4);
-
-      noise.connect(noiseFilter);
-      noiseFilter.connect(noiseGain);
-      noiseGain.connect(ctx.destination);
-
-      noise.start();
-      noise.stop(ctx.currentTime + 4);
+      osc.onended = () => {
+        const i = nodes.indexOf(osc);
+        if (i > -1) nodes.splice(i, 1);
+      };
     }
 
     function startMusic() {
@@ -135,10 +107,11 @@
       const type = document.getElementById('instrument').value;
 
       interval = setInterval(() => {
-        let baseFreq = 100; // Lower base frequency
-        let freq = baseFreq + Math.pow(Math.random(), 2.2) * 600;
-        generateLayeredNote(freq, type);
-      }, 700 + Math.random() * 200);
+        // Generate peaceful, smoothed random notes
+        let baseFreq = 110; // Lower base frequency
+        let freq = baseFreq + Math.pow(Math.random(), 2.5) * 800; // Exponential taper for smoother pitch
+        generateNote(freq, type);
+      }, 600 + Math.random() * 200); // Slow random intervals
     }
 
     function stopMusic() {
