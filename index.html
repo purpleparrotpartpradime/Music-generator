@@ -4,192 +4,199 @@
   <meta charset="UTF-8">
   <title>Electric Music Generator</title>
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
       background: black;
-      font-family: 'Segoe UI', sans-serif;
-      color: #cceaff;
       overflow: hidden;
+      font-family: 'Segoe UI', sans-serif;
     }
 
     canvas {
       position: fixed;
-      top: 0;
-      left: 0;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
       z-index: 0;
     }
 
     #ui {
       position: absolute;
-      top: 40px;
+      z-index: 2;
+      top: 10%;
       left: 50%;
       transform: translateX(-50%);
+      background: rgba(0, 0, 50, 0.8);
+      padding: 30px;
+      border-radius: 20px;
+      color: white;
       text-align: center;
-      z-index: 1;
+      box-shadow: 0 0 20px #00f7;
+    }
+
+    #ui h1 {
+      margin: 0 0 20px;
+      font-size: 2em;
+      text-shadow: 0 0 5px #00f;
+    }
+
+    label, select, button {
+      font-size: 1.2em;
+      margin: 10px;
     }
 
     select, button {
-      background-color: #001f33;
-      border: 2px solid #00aaff;
-      color: white;
-      font-size: 18px;
-      padding: 10px 20px;
-      margin: 10px;
+      padding: 10px;
       border-radius: 10px;
+      border: none;
+      background: #0044ff;
+      color: white;
       cursor: pointer;
+      box-shadow: 0 0 10px #00f;
     }
 
-    h1 {
-      font-size: 42px;
-      margin-bottom: 20px;
-      text-shadow: 0 0 10px #00ffff;
+    button:hover {
+      background: #0022aa;
     }
   </style>
 </head>
 <body>
+
 <canvas id="bg"></canvas>
+
 <div id="ui">
   <h1>Electric Music Generator</h1>
+  <label for="instrument">Instrument:</label>
   <select id="instrument">
-    <option value="synth">Synth (Smooth)</option>
-    <option value="flute">Flute</option>
-    <option value="piano">Piano</option>
-    <option value="bell">Bell</option>
-    <option value="choir">Choir</option>
-  </select><br>
-  <button onclick="startMusic()">Start Audio</button>
-  <button onclick="stopMusic()">Stop Audio</button>
+    <option value="sine">Synth</option>
+    <option value="triangle">Triangle</option>
+    <option value="square">Square</option>
+    <option value="sawtooth">Sawtooth</option>
+    <option value="lowpass">Filtered - Lowpass</option>
+    <option value="highpass">Filtered - Highpass</option>
+  </select>
+  <br>
+  <button id="startBtn">Start Music</button>
+  <button id="stopBtn">Stop Music</button>
 </div>
 
 <script>
-  const canvas = document.getElementById('bg');
-  const ctx = canvas.getContext('2d');
-  let width, height;
-
+  // Background glow
+  const canvas = document.getElementById("bg");
+  const ctx = canvas.getContext("2d");
+  let w, h;
   function resize() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
   }
-  window.addEventListener('resize', resize);
+  window.addEventListener("resize", resize);
   resize();
 
-  let particles = [];
+  const sparks = Array.from({ length: 100 }, () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    r: Math.random() * 2 + 1,
+    dx: (Math.random() - 0.5) * 0.5,
+    dy: (Math.random() - 0.5) * 0.5
+  }));
 
-  class Particle {
-    constructor() {
-      this.reset();
-    }
-    reset() {
-      this.x = Math.random() * width;
-      this.y = Math.random() * height;
-      this.vx = (Math.random() - 0.5) * 0.5;
-      this.vy = (Math.random() - 0.5) * 0.5;
-      this.size = Math.random() * 3 + 1;
-      this.alpha = Math.random() * 0.5 + 0.2;
-    }
-    update() {
-      this.x += this.vx;
-      this.y += this.vy;
-      if (this.x < 0 || this.x > width || this.y < 0 || this.y > height) {
-        this.reset();
-      }
-    }
-    draw(ctx) {
+  function draw() {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.1)";
+    ctx.fillRect(0, 0, w, h);
+    for (let p of sparks) {
       ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size, 0, 2 * Math.PI);
-      ctx.fillStyle = `rgba(0, 170, 255, ${this.alpha})`;
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 150, 255, 0.8)";
       ctx.fill();
+      p.x += p.dx;
+      p.y += p.dy;
+      if (p.x < 0 || p.x > w) p.dx *= -1;
+      if (p.y < 0 || p.y > h) p.dy *= -1;
     }
+    requestAnimationFrame(draw);
   }
+  draw();
+</script>
 
-  for (let i = 0; i < 100; i++) {
-    particles.push(new Particle());
-  }
-
-  function animate() {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(0, 0, width, height);
-    for (let p of particles) {
-      p.update();
-      p.draw(ctx);
-    }
-    requestAnimationFrame(animate);
-  }
-
-  animate();
-
-  // === AUDIO ===
+<script>
   let audioCtx;
+  let gainNode;
+  let intervalId;
   let isPlaying = false;
-  let currentOscillators = [];
+  const oscillators = [];
 
-  function getInstrumentSettings(name) {
-    switch (name) {
-      case 'flute':
-        return { type: 'sine', filterFreq: 1500 };
-      case 'piano':
-        return { type: 'triangle', filterFreq: 1000 };
-      case 'bell':
-        return { type: 'square', filterFreq: 2000 };
-      case 'choir':
-        return { type: 'sawtooth', filterFreq: 800 };
-      default:
-        return { type: 'sine', filterFreq: 3000 }; // Synth
-    }
-  }
+  const instrumentSelector = document.getElementById("instrument");
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
 
-  function startMusic() {
+  startBtn.addEventListener("click", () => {
     if (isPlaying) return;
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0.1;
+    gainNode.connect(audioCtx.destination);
+
     isPlaying = true;
+    startElectricWaves();
+  });
 
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
+  stopBtn.addEventListener("click", () => {
+    if (!isPlaying) return;
 
-    const instrument = document.getElementById('instrument').value;
-    const settings = getInstrumentSettings(instrument);
+    clearInterval(intervalId);
+    oscillators.forEach(o => {
+      try {
+        o.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5);
+        o.osc.stop(audioCtx.currentTime + 1);
+      } catch (e) {}
+    });
+    oscillators.length = 0;
+    isPlaying = false;
+  });
 
-    function playTone() {
-      if (!isPlaying) return;
+  function startElectricWaves() {
+    let lastVal = Math.random();
 
-      const now = audioCtx.currentTime;
-      const freq = 200 + Math.random() * 800;
-      const duration = 2 + Math.random() * 3;
+    intervalId = setInterval(() => {
+      const signal = Math.max(0, Math.min(1, lastVal + (Math.random() - 0.5) * 0.05));
+      lastVal = signal;
+      const freq = 120 + signal * 600;
 
       const osc = audioCtx.createOscillator();
-      osc.type = settings.type;
-      osc.frequency.setValueAtTime(freq, now);
-
       const gain = audioCtx.createGain();
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.1, now + 0.2);
-      gain.gain.linearRampToValueAtTime(0.05, now + duration - 0.5);
-      gain.gain.linearRampToValueAtTime(0, now + duration);
+      const instrument = instrumentSelector.value;
 
-      const filter = audioCtx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(settings.filterFreq, now);
-      filter.Q.value = 8;
+      if (["sine", "square", "triangle", "sawtooth"].includes(instrument)) {
+        osc.type = instrument;
+      } else {
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = instrument;
+        filter.frequency.setValueAtTime(500, audioCtx.currentTime);
+        osc.type = "sine";
+        osc.connect(filter);
+        filter.connect(gain);
+      }
 
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(now);
-      osc.stop(now + duration);
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
 
-      currentOscillators.push(osc);
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 1);
+      gain.gain.setTargetAtTime(0, audioCtx.currentTime + 4, 1);
 
-      setTimeout(playTone, duration * 1000);
-    }
+      osc.connect(gain);
+      gain.connect(gainNode);
 
-    playTone();
-  }
+      osc.start();
+      osc.stop(audioCtx.currentTime + 6);
 
-  function stopMusic() {
-    isPlaying = false;
-    currentOscillators.forEach(o => o.stop());
-    currentOscillators = [];
+      oscillators.push({ osc, gain });
+
+      // Trim old oscillators
+      if (oscillators.length > 20) oscillators.splice(0, 5);
+    }, 1000);
   }
 </script>
+
 </body>
 </html>
