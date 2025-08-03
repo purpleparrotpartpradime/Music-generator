@@ -6,31 +6,39 @@
   <style>
     html, body {
       margin: 0;
-      height: 100%;
-      overflow: hidden;
+      padding: 0;
       background: black;
-      color: #00bfff;
+      overflow: hidden;
       font-family: 'Segoe UI', sans-serif;
+      height: 100%;
     }
     #ui {
       position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 10;
-      background: rgba(0,0,0,0.6);
-      padding: 20px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.7);
       border: 2px solid #00bfff;
-      border-radius: 10px;
-      font-size: 1.5em;
+      padding: 20px 30px;
+      border-radius: 15px;
+      text-align: center;
+      color: #00bfff;
+      z-index: 10;
     }
     label, select, button {
-      display: block;
-      margin: 10px 0;
+      font-size: 1.3em;
+      margin: 10px;
+      background: black;
+      color: #00bfff;
+      border: 1px solid #00bfff;
+      border-radius: 8px;
+      padding: 5px 10px;
     }
     canvas {
       position: absolute;
       top: 0;
       left: 0;
+      z-index: 0;
     }
   </style>
 </head>
@@ -38,11 +46,11 @@
   <div id="ui">
     <label for="instrument">Instrument:</label>
     <select id="instrument">
-      <option value="sine">Synth (Pure)</option>
-      <option value="triangle">Triangle</option>
-      <option value="square">Square</option>
-      <option value="sawtooth">Sawtooth</option>
-    </select>
+      <option value="synth">Synth</option>
+      <option value="bell">Bell</option>
+      <option value="piano">Piano</option>
+      <option value="choir">Choir</option>
+    </select><br />
     <button onclick="startMusic()">Start</button>
     <button onclick="stopMusic()">Stop</button>
   </div>
@@ -59,12 +67,11 @@
       h = canvas.height = window.innerHeight;
     });
 
-    // Glowing floating dots with connection lines
     const dots = Array.from({ length: 100 }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.5,
-      vy: (Math.random() - 0.5) * 0.5
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.3
     }));
 
     function drawBackground() {
@@ -76,7 +83,6 @@
         const a = dots[i];
         a.x += a.vx;
         a.y += a.vy;
-
         if (a.x < 0 || a.x > w) a.vx *= -1;
         if (a.y < 0 || a.y > h) a.vy *= -1;
 
@@ -90,8 +96,8 @@
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
-            ctx.strokeStyle = `rgba(0, 191, 255, ${1 - dist / 120})`;
+          if (dist < 100) {
+            ctx.strokeStyle = `rgba(0,191,255, ${1 - dist / 100})`;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
@@ -104,56 +110,81 @@
 
     drawBackground();
 
-    // Audio generation
-    let context;
-    let oscillators = [];
-    let interval;
+    // Audio logic
+    let audioCtx;
+    let musicInterval = null;
 
-    function generateElectricSignal() {
-      const instrument = document.getElementById('instrument').value;
+    function playTone(frequency, instrument) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
 
-      for (let i = 0; i < 3; i++) {
-        const osc = context.createOscillator();
-        const gain = context.createGain();
+      // Configure oscillator
+      osc.type = 'sine';
 
-        osc.type = instrument;
-        osc.frequency.setValueAtTime(
-          100 + Math.random() * 200 + Math.sin(Date.now() * 0.001 + i) * 30,
-          context.currentTime
-        );
-
-        gain.gain.setValueAtTime(0.05 + Math.random() * 0.03, context.currentTime);
-
-        osc.connect(gain).connect(context.destination);
-        osc.start();
-        osc.stop(context.currentTime + 1.5 + Math.random());
-
-        oscillators.push(osc);
+      // Apply custom waveform based on selected instrument
+      switch (instrument) {
+        case 'synth':
+          osc.type = 'sine';
+          break;
+        case 'bell':
+          osc.type = 'sine';
+          break;
+        case 'piano':
+          osc.type = 'triangle';
+          break;
+        case 'choir':
+          osc.type = 'sawtooth';
+          break;
       }
+
+      osc.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.01 + Math.random() * 0.02, audioCtx.currentTime);
+
+      // Instrumental envelope
+      if (instrument === 'bell') {
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 2);
+      } else if (instrument === 'choir') {
+        gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 2.5);
+      } else {
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
+      }
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start();
+      osc.stop(audioCtx.currentTime + 3);
     }
 
     function startMusic() {
-      if (!context || context.state === 'closed') {
-        context = new (window.AudioContext || window.webkitAudioContext)();
+      const instrument = document.getElementById("instrument").value;
+
+      if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
       }
 
-      if (context.state === 'suspended') {
-        context.resume();
-      }
-
-      if (!interval) {
-        interval = setInterval(generateElectricSignal, 1500);
+      if (!musicInterval) {
+        musicInterval = setInterval(() => {
+          // Play layered tones
+          for (let i = 0; i < 3; i++) {
+            const base = 200 + Math.random() * 300;
+            const detune = (Math.random() - 0.5) * 20;
+            playTone(base + detune, instrument);
+          }
+        }, 1800);
       }
     }
 
     function stopMusic() {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
+      if (musicInterval) {
+        clearInterval(musicInterval);
+        musicInterval = null;
       }
-      if (oscillators.length > 0) {
-        oscillators.forEach(o => o.stop());
-        oscillators = [];
+      if (audioCtx && audioCtx.close) {
+        audioCtx.close();
       }
     }
   </script>
